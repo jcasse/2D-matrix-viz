@@ -1,0 +1,137 @@
+#!/usr/bin/perl
+
+# author: Christian Shelton
+# converts a numerical representation of a two-dimensional binary data matrix
+# to a .pgm graphical representation
+# usage: txt2pgm [0-val 1-val break-val [use-ave]]
+# 0-val, 1-val, and break-val, are values form 0-255
+# use-ave is 0 for binary and 1 for smooth (average-value)
+# example: txt2pgm 225 0 100 1 < blocked_matrix.txt > blocked_matrix.pgm
+
+$clrs{0} = 196;
+$clrs{1} = 0;
+$clrs{' '} = 255;
+
+$ave = 0;
+if (@ARGV>0) {
+	$clrs{0} = $ARGV[0];
+	if (@ARGV>1) {
+		$clrs{1} = $ARGV[1];
+		if (@ARGV>2) {
+			$clrs{' '} = $ARGV[2];
+		}
+	}
+	$ave = (@ARGV>3 ? $ARGV[3] : 0);
+}
+
+$nr = 0;
+$nc = 0;
+$rcount = 0;
+while(<STDIN>) {
+	chomp;
+	push @l, $_;
+	$tnc = length $_;
+	$nc = $tnc if ($nc<$tnc);
+	if ($ave) {
+		if ($_ eq '') {
+			push @nrows, $rcount;
+			$rcount = 0;
+		} else {
+			$rcount++;
+			if (@ncols==0) {
+				@v = split / /, $_;
+				for($i=0;$i<@v;$i++) {
+					push @ncols, (length $v[$i]);
+				}
+			}
+		}
+	}
+	$nr++;
+}
+push @nrows, $rcount if ($rcount>0);
+
+if ($ave) {
+	$nc = 0;
+	for($i=0;$i<@ncols;$i++) {
+		$ncols[$i] = int($ncols[$i]/$ave);
+		$ncols[$i] = 1 if ($ncols[$i]<=0);
+		$nc += $ncols[$i];
+	}
+	$nc += @ncols-1;
+	$nr = 0;
+	for($i=0;$i<@nrows;$i++) {
+		$nrows[$i] = int($nrows[$i]/$ave);
+		$nrows[$i] = 1 if ($nrows[$i]<=0);
+		$nr += $nrows[$i]; 
+	}
+	$nr += @nrows-1;
+}
+
+$c = 0;
+
+sub dumpval {
+	print $_[0];
+	if ($c<70/4-4) {
+		print " ";
+		$c++;
+	} else {
+		print "\n";
+		$c = 0;
+	}
+}
+
+sub dumpaves {
+	for($i=0;$i<@bnum;$i++) {
+		$val[$i] = $onnum[$i]/$bnum[$i]*($clrs{'1'}-$clrs{'0'})
+					+$clrs{'0'};
+		$val[$i] = int($val[$i]);
+		$val[$i] = 255 if ($val[$i]>255);
+		$val[$i] = 0 if ($val[$i]<0);
+	}
+	for($j=0;$j<$nrows[$r];$j++) {
+		for($i=0;$i<@val;$i++) {
+			for($k=0;$k<$ncols[$i];$k++) {
+				dumpval($val[$i]);
+			}
+			dumpval($clrs{' '}) if ($i<@val-1);
+		}
+	}
+	@bnum = ();
+	@onnum = ();
+	$r++;
+}
+
+print "P2\n$nc $nr\n255\n";
+$cind = 0;
+$r = 0;
+foreach $_ (@l) {
+	@v = split //, $_;
+	if (@v==0) {
+		if ($ave) {
+			dumpaves();
+		}
+		for($i=0;$i<$nc;$i++) {
+			dumpval($clrs{' '});
+		}
+	} else {
+		foreach $a (@v) {
+			if (!(defined $clrs{$a}))  {
+				print STDERR "error: $a\n";
+				exit(1);
+			}
+			if ($ave) {
+				if ($a eq ' ') {
+					$cind++;
+				} else {
+					$bnum[$cind]++;
+					$onnum[$cind]++ if ($a==1);
+				}
+			} else {
+				dumpval($clrs{$a});
+			}
+		}
+		$cind = 0;
+	}
+}
+dumpaves() if ($r<@nrows);
+print "\n" if ($c>0);
